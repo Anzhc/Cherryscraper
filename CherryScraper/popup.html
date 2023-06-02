@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 2px;
+        background-color: #f0f0f0;
+        color: #333;
+        width: 300px; /* Adjust this value as needed */
+        margin: 0 auto; /* Center the body */
+      }
+      label {
+        display: block;
+        margin-bottom: 2px;
+      }
+      input[type="checkbox"] {
+        margin-right: 2px;
+      }
+      select {
+        width: 100%;
+        padding: 2px;
+        margin-top: 2px;
+        margin-bottom: 2px;
+      }
+      .option-group {
+        margin-bottom: 2px;
+      }
+      .help-text {
+        font-size: 0.8em;
+        color: #666;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 2px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      input[type="text"]:hover, select:hover {
+        border-color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <form id="optionsForm">
+        <label>
+            <input type="checkbox" id="enableButton">
+            Enable Scrape Button
+        </label>
+        <label>
+            Select Site:
+            <select id="selectedSite"></select>
+        </label>
+    </form>
+    <div class="option-group">
+        <label for="downloadDirectory">Download Directory:</label>
+        <input type="text" id="downloadDirectory" name="downloadDirectory">
+        <p class="help-text">Enter a name for subdirectory, if needed. "dataset", for example.</p>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
