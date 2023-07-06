@@ -1,5 +1,5 @@
 # Cherryscraper
-Just a simple small to help with dataset gathering.
+Just a simple small tool to help with dataset gathering.
 Google Web Store is taking too long to approve extension, so im releasing it as is.
 ## Install
 Google approved extension, so you also can get it from official store page - https://chrome.google.com/webstore/detail/cherryscraper/dmgibfaenicepbmjcbejibgbaohfkido?hl=en-GB&authuser=0  
