@@ -3,10 +3,14 @@ Just a simple small tool to help with dataset gathering.
 Google Web Store is taking too long to approve extension, so im releasing it as is.
 ## Install
 Google approved extension, so you also can get it from official store page - https://chrome.google.com/webstore/detail/cherryscraper/dmgibfaenicepbmjcbejibgbaohfkido?hl=en-GB&authuser=0  
-
+(Google - up to date, pushed v2.1)
 Firefox did approve too! - https://addons.mozilla.org/ru/firefox/addon/cherryscraper/  
+(old, v1, no automatic mode)
 
-
+## Changelog  
+V2.1 - some more sites, like KnowYourMeme, are supported.  
+V2 - automatic mode! Now you can choose to only open page with image you're interested in, and it will get downloaded.  
+V1 - it works, download works with press of "c", while you're on image page.  
 ## Manual installation
 Chrome - Open Chrome, navigate to extension tab, turn on developer mode, add unpackaged extension.  
 Firefox - google how to add temporary extension, i actually forgor ;-;
