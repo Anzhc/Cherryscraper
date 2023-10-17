@@ -1,3 +1,38 @@
+const scrapeAction = function() {
+    gatherData(function(data) {
+        console.log(data);
+        // Get the automaticDownload option from storage.
+        chrome.storage.sync.get('automaticDownload', function(settings) {
+            // Send the data to the background script.
+            chrome.runtime.sendMessage({
+                action: 'gatherData',
+                data: data,
+                automaticDownload: settings.automaticDownload // Add the setting to the message.
+            });
+
+            // Get tab id from the background script.
+            chrome.runtime.sendMessage({action: 'getTabId'}, function(response) {
+                // Create a Blob from the tags and convert it into a Data URL.
+                let tagsBlob = new Blob([data.tags.join(',')], {type: 'text/plain'});
+                let tagsUrl = URL.createObjectURL(tagsBlob);
+                console.log(tagsUrl);
+
+                // Replace the image extension with .txt to get the filename for the tags.
+                let tagsFilename = data.imageName.replace(/\.[^.]*$/, '.txt');
+
+                // Send the tags data to the background script.
+                chrome.runtime.sendMessage({
+                    action: 'downloadTags',
+                    tagsUrl: tagsUrl,
+                    tagsFilename: tagsFilename,
+                    automaticDownload: settings.automaticDownload, // Add the setting to the message.
+                    tabId: response.tabId
+                });
+            });
+        });
+    });
+};
+
 // This function creates a button and adds it to the page.
 function addButton() {
     let button = document.createElement('button');
@@ -6,30 +41,6 @@ function addButton() {
     button.style.bottom = '1px';
     button.style.left = '1px';
     button.style.zIndex = 1000;
-    
-    // This function performs the scraping action.
-    const scrapeAction = function() {
-        gatherData(function(data) {
-            console.log(data);
-            // Send the data to the background script.
-            chrome.runtime.sendMessage({action: 'gatherData', data: data});
-            
-            // Create a Blob from the tags and convert it into a Data URL.
-            let tagsBlob = new Blob([data.tags.join(',')], {type: 'text/plain'});
-            let tagsUrl = URL.createObjectURL(tagsBlob);
-            console.log(tagsUrl);
-
-            // Replace the image extension with .txt to get the filename for the tags.
-            let tagsFilename = data.imageName.replace(/\.[^.]*$/, '.txt');
-
-            // Send the tags data to the background script.
-            chrome.runtime.sendMessage({
-                action: 'downloadTags',
-                tagsUrl: tagsUrl,
-                tagsFilename: tagsFilename
-            });
-        });
-    };
 
     // Add the event listener to the button.
     button.addEventListener('click', scrapeAction);
@@ -45,13 +56,31 @@ function addButton() {
     document.body.appendChild(button);
 }
 
+// Add an event listener to execute the scrapeAction when the page is fully loaded.
+window.addEventListener('load', function() {
+    // Get the automaticDownload option from storage.
+    chrome.storage.sync.get('automaticDownload', function(data) {
+        if (data.automaticDownload) {
+            scrapeAction();
+        }
+    });
+});
 // This function checks whether the user has enabled the button and adds it to the page if so.
 chrome.storage.sync.get('buttonEnabled', function(data) {
     if (data.buttonEnabled) {
         addButton();
     }
 });
-
+// Helper function to generate a random name
+function generateRandomName(minLength, maxLength) {
+    let charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let length = Math.floor(Math.random() * (maxLength - minLength + 1)) + minLength;
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    return result;
+}
 // Define a function for gathering data from Danbooru.
 function gatherDataDanbooru() {
     try {
@@ -376,6 +405,7 @@ function gatherDataChounyuu() {
 
         // Extract the image name from the URL
         let imageName = imageUrl.split('/').pop().split('?')[0];
+        
 
         let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
         console.log('gatherDataDerpibooru data:', data);  // Log the entire data object.
@@ -385,6 +415,137 @@ function gatherDataChounyuu() {
         console.error('Error in gatherDataDerpibooru:', error);  // Log any unexpected errors.
         return null;
     }
+}
+function gatherDataYandex() {
+    try {
+        // Select elements based on attribute.
+        let tagElementsDefault = document.querySelectorAll('.MMOrganicSnippet-Text');
+            
+        // Combine all tags into a single array.
+        let tags = Array.from(tagElementsDefault).map(el => el.textContent);
+    
+        let imageElement = document.querySelector('.SwipeImage.MMImageWrapper .MMImage-Origin');
+        let imageUrl = imageElement.src;
+    
+        // Extract the image name from the URL
+        let imageName = imageUrl.split('/').pop().split('?')[0];
+    
+        // Check if the image name is 'i' or starts with '6CL1u' and assign a random name with .png extension
+        if (!imageName.includes('.')) {
+            imageName = generateRandomName(16, 32) + '.png';
+        }
+        
+        // Assign the tags file name as the same name with .txt extension
+        let tagsFilename = imageName.replace('.png', '.txt');
+    
+        let data = {tags: tags, imageUrl: imageUrl, imageName: imageName, tagsFilename: tagsFilename};
+        console.log('gatherDataDerpibooru data:', data);  // Log the entire data object.
+    
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataDerpibooru:', error);  // Log any unexpected errors.
+        return null;
+    }
+}
+function gatherDataNozomi() {
+    try {
+        // Select elements based on attribute.
+        let tagElementsCharacter = document.querySelectorAll('a.character');
+        let tagElementsCopyright = document.querySelectorAll('a.copyright');
+        let tagElementsGeneral = document.querySelectorAll('a.general');
+        let tagElementsArtist = document.querySelectorAll('a.artist');
+        
+        // Combine all tags into a single array.
+        let tags = Array.from(tagElementsGeneral).map(el => el.textContent);
+        tags = tags.concat(Array.from(tagElementsCopyright).map(el => el.textContent));
+        tags = tags.concat(Array.from(tagElementsArtist).map(el => el.textContent));
+        tags = tags.concat(Array.from(tagElementsCharacter).map(el => el.textContent));
+    
+        let imageElement = document.querySelector('.container .post img');
+        let imageUrl = imageElement.src;
+    
+        // Extract the image name from the URL
+        let imageName = imageUrl.split('/').pop().split('?')[0];
+        
+        // Assign the tags file name as the same name with .txt extension
+        let tagsFilename = imageName.replace(/\.[^.]*$/, '.txt');
+    
+        let data = {tags: tags, imageUrl: imageUrl, imageName: imageName, tagsFilename: tagsFilename};
+        console.log('gatherDataNozomi data:', data);  // Log the entire data object.
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataNozomi:', error);  // Log any unexpected errors.
+        return null;
+    }
+}
+function gatherDataKnowYourMeme() {
+    try {
+        // Select the anchor element within the specified div.
+        let anchorElement = document.querySelector('#photo_wrapper a');
+
+        // Check if the anchor element exists to avoid a null reference error.
+        if (!anchorElement) {
+            console.warn('No anchor element found');
+            return null;
+        }
+
+        // Get the title attribute from the anchor element.
+        let title = anchorElement.title;
+
+        // Select the image element within the specified div.
+        let imageElement = document.querySelector('#photo_wrapper a img');
+
+        // Check if the image element exists to avoid a null reference error.
+        if (!imageElement) {
+            console.warn('No image element found');
+            return null;
+        }
+
+        // Get the image URL and alternative text.
+        let imageUrl = imageElement.src;
+        let imageName = imageElement.alt;
+
+        // If the image alt text is empty or not useful, extract the image name from the URL.
+        if (!imageName) {
+            imageName = imageUrl.split('/').pop().split('?')[0];
+        }
+
+        // Assume that you still want to gather tags, but correct the selector.
+        let tagElementsDefault = document.querySelectorAll('#photo_wrapper .tag'); // Assuming tags have a class of 'tag'.
+        let tags = Array.from(tagElementsDefault).map(el => el.textContent);
+
+        // Include the title as one of the tags.
+        tags.push(title);
+
+        // Assign the tags file name as the same name with .txt extension
+        let tagsFilename = imageName.replace('.png', '.txt');
+
+        let data = {
+            tags: tags,
+            imageUrl: imageUrl,
+            imageName: imageName,
+            tagsFilename: tagsFilename
+        };
+        
+        console.log('gatherKnowYourMeme data:', data);  // Log the entire data object.
+
+        return data;
+    } catch (error) {
+        console.error('Error in gatherKnowYourMeme:', error);  // Log any unexpected errors.
+        return null;
+    }
+}
+
+
+// Helper function to generate a random name
+function generateRandomName(minLength, maxLength) {
+    let charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let length = Math.floor(Math.random() * (maxLength - minLength + 1)) + minLength;
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    return result;
 }
 // Define a function for gathering data from another site (just a placeholder for now).
 function gatherDataOtherSite() {
@@ -431,6 +592,15 @@ function gatherData(callback) {
             break;
             case 'chounyuu.com':
                 gatheredData = gatherDataChounyuu();
+            break;
+            case 'yandex.ru':
+                gatheredData = gatherDataYandex();
+            break;
+            case 'nozomi.la':
+                gatheredData = gatherDataNozomi();
+            break;
+            case 'Knowyourmeme.com':
+                gatheredData = gatherDataKnowYourMeme();
             break;
             // ... add more cases as needed ...
             default:
