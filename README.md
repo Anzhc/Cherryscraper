@@ -7,7 +7,7 @@ Like half of those were added as per suggestions on Civitai discord, so, feel fr
 
 ## Install
 Google approved extension, so you also can get it from official store page - https://chrome.google.com/webstore/detail/cherryscraper/dmgibfaenicepbmjcbejibgbaohfkido?hl=en-GB&authuser=0  
-(Google - up to date, pushed v2.1)
+(Google - up to date, pushed v2.1)  
 Firefox did approve too! - https://addons.mozilla.org/ru/firefox/addon/cherryscraper/  
 (old, v1, no automatic mode)
 
