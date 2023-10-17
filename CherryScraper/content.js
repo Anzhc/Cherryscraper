@@ -503,12 +503,7 @@ function gatherDataKnowYourMeme() {
 
         // Get the image URL and alternative text.
         let imageUrl = imageElement.src;
-        let imageName = imageElement.alt;
-
-        // If the image alt text is empty or not useful, extract the image name from the URL.
-        if (!imageName) {
-            imageName = imageUrl.split('/').pop().split('?')[0];
-        }
+        let imageName = generateRandomName(16, 32) + '.png';
 
         // Assume that you still want to gather tags, but correct the selector.
         let tagElementsDefault = document.querySelectorAll('#photo_wrapper .tag'); // Assuming tags have a class of 'tag'.
