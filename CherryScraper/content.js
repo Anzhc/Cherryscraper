@@ -203,8 +203,11 @@ function gatherDataRule34() {
         // Combine all tags into a single array
         let tags = [...tagsGeneral, ...tagsCharacter, ...tagsArtist, ...tagsCopyright, ...tagsMetadata];
 
-        let imageElement = document.querySelector('.content img');
-        let imageUrl = imageElement.src;
+        let imageElement = document.querySelectorAll('.content img');
+        let imageUrl;
+        for (let i = 0; i < imageElement.length; i++) {
+            if (imageElement[i]?.alt != "") imageUrl = imageElement[i].src;
+        }
 
         // Extract the image name from the URL
         let imageName = imageUrl.split('/').pop().split('?')[0];
