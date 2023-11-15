@@ -533,7 +533,25 @@ function gatherDataKnowYourMeme() {
         return null;
     }
 }
+function gatherDataPinterest() {
+    try {
 
+        // Select the second image inside a div with data-test-id='closeup-image'
+        let imageElements = document.querySelectorAll('div[data-test-id="closeup-image"] img');
+        let imageUrl = imageElements.length > 1 ? imageElements[1].src : null; // Select the second image
+
+        // Generate a random image name (ensure generateRandomName is defined)
+        let imageName = imageUrl ? (generateRandomName(16, 32) + '.png') : null;
+
+        let data = { imageUrl: imageUrl, imageName: imageName };
+        console.log('gatherDataPinterest data:', data);
+
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataDanbooru:', error);  // Log any unexpected errors.
+        return null;
+    }
+}
 
 // Helper function to generate a random name
 function generateRandomName(minLength, maxLength) {
@@ -599,6 +617,9 @@ function gatherData(callback) {
             break;
             case 'Knowyourmeme.com':
                 gatheredData = gatherDataKnowYourMeme();
+            break;
+            case 'pinterest.com':
+                gatheredData = gatherDataPinterest();
             break;
             // ... add more cases as needed ...
             default:
