@@ -2,7 +2,7 @@
 Just a simple small tool to help with dataset gathering.
 Google Web Store is taking too long to approve extension, so im releasing it as is.
 ### Currently supported sites
-Danbooru, Safebooru, Gelbooru, Realbooru, yande.re, chounyuu, e621, tbib, sankakucomplex, rule34, derpibooru, yandex, nozomi, knowyourmeme.
+Danbooru, Safebooru, Gelbooru, Realbooru, yande.re, chounyuu, e621, tbib, sankakucomplex, rule34, derpibooru, yandex, nozomi, knowyourmeme, pinterest.
 Like half of those were added as per suggestions on Civitai discord, so, feel free to ask for your favorite sites that are not covered yet.
 
 ## Install
