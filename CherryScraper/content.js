@@ -552,7 +552,112 @@ function gatherDataPinterest() {
         return null;
     }
 }
+function gatherDataPixiv() {
+    try {
+        // Select the first image inside a div with role 'presentation'
+        let imageElement = document.querySelector('div[role="presentation"] img');
+        let imageUrl = imageElement ? imageElement.src : null;
 
+        // Assuming generateRandomName is correctly defined
+        let imageName = imageUrl ? (generateRandomName(16, 32) + '.png') : null;
+
+        let data = { imageUrl: imageUrl, imageName: imageName };
+        console.log('gatherDataPixiv data:', data);
+
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataPixiv:', error);
+        return null;
+    }
+}
+function gatherDataMetmuseum() {
+    try {
+        // Select the first image inside a div with role 'presentation'
+        let imageElement = document.querySelector('#artwork__image__wrapper img');
+        let imageUrl = imageElement ? imageElement.src : null;
+
+        // Assuming generateRandomName is correctly defined
+        let imageName = (generateRandomName(16, 32) + '.png');
+
+        let data = { imageUrl: imageUrl, imageName: imageName };
+        console.log('gatherDataPixiv data:', data);
+
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataPixiv:', error);
+        return null;
+    }
+}
+function gatherDataCivitai() {
+    try {
+        // Select the first image element on the page.
+        let imageElement = document.querySelector('img');
+
+        // Check if the image element exists to avoid a null reference error.
+        if (!imageElement) {
+            console.warn('No image element found');
+            return null;
+        }
+
+        // Get the image URL.
+        let imageUrl = imageElement.src;
+
+        // Extract the image name from the URL.
+        let imageName = imageUrl.split('/').pop().split('?')[0];
+
+        // Optionally get tags from the alt text if it exists.
+        let altText = imageElement.alt;
+        let tags = altText ? altText.split(' ') : [];
+
+        let data = {
+            imageUrl: imageUrl,
+            imageName: imageName,
+            tags: tags
+        };
+
+        console.log('Scraped data from Civitai:', data);  // Log the data gathered.
+
+        return data;
+    } catch (error) {
+        console.error('Error in scrapeImageFromCivitai:', error);  // Log any unexpected errors.
+        return null;
+    }
+}
+function gatherDataGenericSite() {
+    try {
+        // Select the first image element on the page.
+        let imageElement = document.querySelector('img');
+
+        // Check if the image element exists to avoid a null reference error.
+        if (!imageElement) {
+            console.warn('No image element found');
+            return null;
+        }
+
+        // Get the image URL.
+        let imageUrl = imageElement.src;
+
+        // Extract the image name from the URL.
+        let imageName = imageUrl.split('/').pop().split('?')[0];
+
+        // Optionally get tags from the alt text if it exists.
+        let altText = imageElement.alt;
+        let tags = altText ? altText.split(' ') : [];
+
+        let data = {
+            imageUrl: imageUrl,
+            imageName: imageName,
+            tags: tags
+        };
+
+        console.log('Scraped data from GenericSite:', data);  // Log the data gathered.
+
+        return data;
+    } catch (error) {
+        console.error('Error in scrapeImageFromGenericSite:', error);  // Log any unexpected errors.
+        return null;
+    }
+}
 // Helper function to generate a random name
 function generateRandomName(minLength, maxLength) {
     let charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -562,10 +667,6 @@ function generateRandomName(minLength, maxLength) {
         result += charset.charAt(Math.floor(Math.random() * charset.length));
     }
     return result;
-}
-// Define a function for gathering data from another site (just a placeholder for now).
-function gatherDataOtherSite() {
-    // ... code to gather data from the other site ...
 }
 // Define a function that selects the appropriate data gathering function based on the user's choice of site.
 function gatherData(callback) {
@@ -620,6 +721,18 @@ function gatherData(callback) {
             break;
             case 'pinterest.com':
                 gatheredData = gatherDataPinterest();
+            break;
+            case 'pixiv.net':
+                gatheredData = gatherDataPixiv();
+            break;
+            case 'metmuseum.org':
+                gatheredData = gatherDataMetmuseum();
+            break;
+            case 'civitai.com':
+                gatheredData = gatherDataCivitai();
+            break;
+            case 'GenericSite.com':
+                gatheredData = gatherDataGenericSite();
             break;
             // ... add more cases as needed ...
             default:
