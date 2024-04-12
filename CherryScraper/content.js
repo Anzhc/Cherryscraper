@@ -590,12 +590,12 @@ function gatherDataMetmuseum() {
 }
 function gatherDataCivitai() {
     try {
-        // Select the first image element on the page.
-        let imageElement = document.querySelector('img');
+        // Select the first image element with the specified class.
+        let imageElement = document.querySelector('img.mantine-it6rft');
 
         // Check if the image element exists to avoid a null reference error.
         if (!imageElement) {
-            console.warn('No image element found');
+            console.warn('No image with specified class found');
             return null;
         }
 
