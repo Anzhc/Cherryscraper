@@ -12,6 +12,7 @@ Firefox did approve too! - https://addons.mozilla.org/ru/firefox/addon/cherryscr
 (old, v1, no automatic mode)
 
 ## Changelog  
+V2.1.5 - more sites: metmuseum(because i needed cartography stuff), civitai(cuz yes), and function for generic site scraping(which totally is not a civitai function copy), that you should be able to use for sites that follow a structure of gallery which you can open single images on.
 V2.1 - some more sites, like KnowYourMeme, are supported.  
 V2 - automatic mode! Now you can choose to only open page with image you're interested in, and it will get downloaded.  
 V1 - it works, download works with press of "c", while you're on image page.  
