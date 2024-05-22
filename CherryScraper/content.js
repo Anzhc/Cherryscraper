@@ -623,6 +623,46 @@ function gatherDataCivitai() {
         return null;
     }
 }
+function gatherDataWallhaven() {
+    try {
+        // Select the image element with the specified ID.
+        let imageElement = document.getElementById('wallpaper');
+
+        // Check if the image element exists to avoid a null reference error.
+        if (!imageElement) {
+            console.warn('No image with ID "wallpaper" found');
+            return null;
+        }
+
+        // Get the image URL.
+        let imageUrl = imageElement.src;
+
+        // Extract the image name from the URL.
+        let imageName = imageUrl.split('/').pop().split('?')[0];
+
+        // Select all tag elements with the specified class.
+        let tagElements = document.querySelectorAll('a.tagname');
+
+        // Collect plaintext from all tag elements.
+        let tags = [];
+        tagElements.forEach(tagElement => {
+            tags.push(tagElement.textContent.trim());
+        });
+
+        let data = {
+            imageUrl: imageUrl,
+            imageName: imageName,
+            tags: tags
+        };
+
+        console.log('Scraped data from Wallpaper:', data);  // Log the data gathered.
+
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataFromWallpaper:', error);  // Log any unexpected errors.
+        return null;
+    }
+}
 function gatherDataGenericSite() {
     try {
         // Select the first image element on the page.
@@ -730,6 +770,9 @@ function gatherData(callback) {
             break;
             case 'civitai.com':
                 gatheredData = gatherDataCivitai();
+            break;
+            case 'wallhaven.cc':
+                gatheredData = gatherDataWallhaven();
             break;
             case 'GenericSite.com':
                 gatheredData = gatherDataGenericSite();

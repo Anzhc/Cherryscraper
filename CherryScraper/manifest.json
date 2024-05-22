@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CherryScraper",
-  "version": "2.1.5",
+  "version": "2.1.7",
   "description": "Extension to semi-automatically scrape images. Easy to use and quick. Cherrypick data you really want!",
   "permissions": ["storage", "downloads", "<all_urls>", "tabs"],
   "icons": {

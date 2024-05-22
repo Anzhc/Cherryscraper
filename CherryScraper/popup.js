@@ -8,7 +8,26 @@ function setDefaultOptions() {
             chrome.storage.sync.set({selectedSite: 'danbooru.donmai.us'});  // Set default value for selectedSite
         }
         if (data.siteList === undefined) {
-            chrome.storage.sync.set({siteList: ['danbooru.donmai.us', 'safebooru.org', 'tbib.org', 'derpibooru.org', 'rule34.xxx','sankakucomplex.com','gelbooru.com','yande.re','e621.net', 'realbooru.com','chounyuu.com', 'yandex.ru', 'nozomi.la', 'Knowyourmeme.com', 'pinterest.com', 'pixiv.net', 'metmuseum.org', 'civitai.com', 'GenericSite.com']});  // Set default value for siteList
+            chrome.storage.sync.set({siteList: ['danbooru.donmai.us', 
+            'safebooru.org', 
+            'tbib.org', 
+            'derpibooru.org', 
+            'rule34.xxx',
+            'sankakucomplex.com',
+            'gelbooru.com',
+            'yande.re',
+            'e621.net', 
+            'realbooru.com',
+            'chounyuu.com', 
+            'yandex.ru', 
+            'nozomi.la', 
+            'Knowyourmeme.com', 
+            'pinterest.com', 
+            'pixiv.net', 
+            'metmuseum.org', 
+            'civitai.com',
+            'wallhaven.cc',
+            'GenericSite.com']});  // Set default value for siteList
         }
         if (data.downloadDirectory === undefined) {
             chrome.storage.sync.set({downloadDirectory: 'dataset'});  // Set default value for downloadDirectory
