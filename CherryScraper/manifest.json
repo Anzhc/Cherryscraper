@@ -1,17 +1,32 @@
 {
   "manifest_version": 3,
   "name": "CherryScraper",
-  "version": "2.1.7",
+  "version": "2.5.0",
   "description": "Extension to semi-automatically scrape images. Easy to use and quick. Cherrypick data you really want!",
-  "permissions": ["storage", "downloads", "<all_urls>", "tabs"],
   "icons": {
     "128": "icon.png"
   },
-  "action": {
-    "default_popup": "popup.html"
-  },
+
+  "permissions": [
+    "storage",
+    "downloads",
+    "tabs",
+    "webRequest",
+    "webRequestBlocking"
+  ],
+
+  "host_permissions": [
+    "<all_urls>",
+    "*://i.pximg.net/*",
+    "*://www.pixiv.net/*"
+  ],
+
   "background": {
     "service_worker": "background.js"
+  },
+
+  "action": {
+    "default_popup": "popup.html"
   },
   "content_scripts": [
     {

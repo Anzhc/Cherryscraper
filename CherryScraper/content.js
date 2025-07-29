@@ -1,31 +1,38 @@
-const scrapeAction = function() {
-    gatherData(function(data) {
-        console.log(data);
-        // Get the automaticDownload option from storage.
-        chrome.storage.sync.get('automaticDownload', function(settings) {
-            // Send the data to the background script.
-            chrome.runtime.sendMessage({
-                action: 'gatherData',
-                data: data,
-                automaticDownload: settings.automaticDownload // Add the setting to the message.
-            });
+async function prepareImageUrl(imageUrl) {
+    if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+    }
+    return imageUrl;
+}
 
-            // Get tab id from the background script.
+const scrapeAction = function() {
+    gatherData(async function(data) {
+        console.log(data);
+        data.imageUrl = await prepareImageUrl(data.imageUrl);
+        chrome.storage.sync.get(['automaticDownload', 'closeAfterDownload'], function(settings) {
+            {
+                // Normal approach for other sites
+                chrome.runtime.sendMessage({
+                    action: 'gatherData',
+                    data: data,
+                    automaticDownload: settings.automaticDownload
+                });
+            }
+
+            // Next, send tags to background the same way as before
             chrome.runtime.sendMessage({action: 'getTabId'}, function(response) {
-                // Create a Blob from the tags and convert it into a Data URL.
                 let tagsBlob = new Blob([data.tags.join(',')], {type: 'text/plain'});
                 let tagsUrl = URL.createObjectURL(tagsBlob);
-                console.log(tagsUrl);
-
-                // Replace the image extension with .txt to get the filename for the tags.
                 let tagsFilename = data.imageName.replace(/\.[^.]*$/, '.txt');
 
-                // Send the tags data to the background script.
                 chrome.runtime.sendMessage({
                     action: 'downloadTags',
                     tagsUrl: tagsUrl,
                     tagsFilename: tagsFilename,
-                    automaticDownload: settings.automaticDownload, // Add the setting to the message.
+                    closeAfterDownload: settings.closeAfterDownload,
+                    automaticDownload: settings.automaticDownload,
                     tabId: response.tabId
                 });
             });
@@ -33,6 +40,33 @@ const scrapeAction = function() {
     });
 };
 
+const fallbackScrapeAction = function() {
+    let data = gatherDataFallback();
+    if (!data) { return; }
+    chrome.storage.sync.get(['automaticDownload', 'closeAfterDownload'], async function(settings) {
+        data.imageUrl = await prepareImageUrl(data.imageUrl);
+        chrome.runtime.sendMessage({
+            action: 'gatherData',
+            data: data,
+            automaticDownload: settings.automaticDownload
+        });
+
+        chrome.runtime.sendMessage({action: 'getTabId'}, function(response) {
+            let tagsBlob = new Blob([data.tags.join(',')], {type: 'text/plain'});
+            let tagsUrl = URL.createObjectURL(tagsBlob);
+            let tagsFilename = data.imageName.replace(/\.[^.]*$/, '.txt');
+
+            chrome.runtime.sendMessage({
+                action: 'downloadTags',
+                tagsUrl: tagsUrl,
+                tagsFilename: tagsFilename,
+                closeAfterDownload: settings.closeAfterDownload,
+                automaticDownload: settings.automaticDownload,
+                tabId: response.tabId
+            });
+        });
+    });
+};
 // This function creates a button and adds it to the page.
 function addButton() {
     let button = document.createElement('button');
@@ -42,14 +76,30 @@ function addButton() {
     button.style.left = '1px';
     button.style.zIndex = 1000;
 
-    // Add the event listener to the button.
-    button.addEventListener('click', scrapeAction);
+    // Add the event listener to the button. When clicked, choose between
+    // the normal scrapeAction or the fallbackScrapeAction based on the
+    // current setting.
+    button.addEventListener('click', function() {
+        chrome.storage.sync.get('fallbackDownload', function(data) {
+            if (data.fallbackDownload) {
+                fallbackScrapeAction();
+            } else {
+                scrapeAction();
+            }
+        });
+    });
 
     // Add a keypress event listener to the document.
     document.addEventListener('keypress', function(e) {
         // Check if the pressed key is "c".
         if (e.key === 'c') {
-            scrapeAction();
+            chrome.storage.sync.get('fallbackDownload', function(data) {
+                if (data.fallbackDownload) {
+                    fallbackScrapeAction();
+                } else {
+                    scrapeAction();
+                }
+            });
         }
     });
 
@@ -58,9 +108,11 @@ function addButton() {
 
 // Add an event listener to execute the scrapeAction when the page is fully loaded.
 window.addEventListener('load', function() {
-    // Get the automaticDownload option from storage.
-    chrome.storage.sync.get('automaticDownload', function(data) {
-        if (data.automaticDownload) {
+    chrome.storage.sync.get(['automaticDownload', 'closeAfterDownload', 'fallbackDownload'], function(data) {
+        if (data.fallbackDownload) {
+            // When fallback mode is enabled, only run the fallback method.
+            fallbackScrapeAction();
+        } else if (data.automaticDownload) {
             scrapeAction();
         }
     });
@@ -88,7 +140,16 @@ function gatherDataDanbooru() {
         let tagElements = document.querySelectorAll('[data-tag-name]');
         let tags = Array.from(tagElements).map(el => el.getAttribute('data-tag-name'));
 
-        let imageElement = document.querySelector('.image-container.note-container.blacklisted picture img');
+        // Danbooru's layout may vary. Try a few selectors to locate the main image.
+        let imageElement = document.querySelector('#image') ||
+                           document.querySelector('.image-container picture img') ||
+                           document.querySelector('.image-container img');
+
+        if (!imageElement) {
+            console.warn('Could not find image element on Danbooru page');
+            return null;
+        }
+
         let imageUrl = imageElement.src;
 
         // Extract the image name from the URL
@@ -154,11 +215,11 @@ function gatherDataTbib() {
         let imageName = imageUrl.split('/').pop().split('?')[0];
 
         let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
-        console.log('gatherDataDanbooru data:', data);  // Log the entire data object.
+        console.log('gatherDataTbib data:', data);  // Log the entire data object.
 
         return data;
     } catch (error) {
-        console.error('Error in gatherDataDanbooru:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataTbib:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -185,39 +246,43 @@ function gatherDataDerpibooru() {
 }
 function gatherDataRule34() {
     try {
-        let tagElementsGeneral = document.querySelectorAll('.tag-type-general.tag');
-        let tagsGeneral = Array.from(tagElementsGeneral).map(li => li.querySelectorAll('a')[1].textContent);
-        
-        let tagElementsCharacter = document.querySelectorAll('.tag-type-character.tag');
-        let tagsCharacter = Array.from(tagElementsCharacter).map(li => li.querySelectorAll('a')[1].textContent);
-        
-        let tagElementsArtist = document.querySelectorAll('.tag-type-artist.tag');
-        let tagsArtist = Array.from(tagElementsArtist).map(li => li.querySelectorAll('a')[1].textContent);
-        
-        let tagElementsCopyright = document.querySelectorAll('.tag-type-copyright.tag');
-        let tagsCopyright = Array.from(tagElementsCopyright).map(li => li.querySelectorAll('a')[1].textContent);
-        
-        let tagElementsMetadata = document.querySelectorAll('.tag-type-metadata.tag');
-        let tagsMetadata = Array.from(tagElementsMetadata).map(li => li.querySelectorAll('a')[1].textContent);
-        
-        // Combine all tags into a single array
-        let tags = [...tagsGeneral, ...tagsCharacter, ...tagsArtist, ...tagsCopyright, ...tagsMetadata];
+        // Optional check: ensure we are on a post page
+        if (window.location.href.includes('index.php?page=post&s=view')) {
+            console.log("We are on a page matching `index.php?page=post&s=view`");
 
-        let imageElement = document.querySelectorAll('.content img');
-        let imageUrl;
-        for (let i = 0; i < imageElement.length; i++) {
-            if (imageElement[i]?.alt != "") imageUrl = imageElement[i].src;
+            let tagElementsGeneral = document.querySelectorAll('.tag-type-general.tag');
+            let tagsGeneral = Array.from(tagElementsGeneral).map(li => li.querySelectorAll('a')[1].textContent);
+            
+            let tagElementsCharacter = document.querySelectorAll('.tag-type-character.tag');
+            let tagsCharacter = Array.from(tagElementsCharacter).map(li => li.querySelectorAll('a')[1].textContent);
+            
+            let tagElementsArtist = document.querySelectorAll('.tag-type-artist.tag');
+            let tagsArtist = Array.from(tagElementsArtist).map(li => li.querySelectorAll('a')[1].textContent);
+            
+            let tagElementsCopyright = document.querySelectorAll('.tag-type-copyright.tag');
+            let tagsCopyright = Array.from(tagElementsCopyright).map(li => li.querySelectorAll('a')[1].textContent);
+            
+            let tagElementsMetadata = document.querySelectorAll('.tag-type-metadata.tag');
+            let tagsMetadata = Array.from(tagElementsMetadata).map(li => li.querySelectorAll('a')[1].textContent);
+            
+            // Combine all tags into a single array
+            let tags = [...tagsGeneral, ...tagsCharacter, ...tagsArtist, ...tagsCopyright, ...tagsMetadata];
+
+            let imageElement = document.querySelectorAll('.content img');
+            let imageUrl;
+            for (let i = 0; i < imageElement.length; i++) {
+                if (imageElement[i]?.alt != "") imageUrl = imageElement[i].src;
+            }
+            // Extract the image name from the URL
+            let imageName = imageUrl.split('/').pop().split('?')[0];
+
+            let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
+            console.log('gatherDataRule34 data:', data);  // Log the entire data object.
+
+            return data;
         }
-
-        // Extract the image name from the URL
-        let imageName = imageUrl.split('/').pop().split('?')[0];
-
-        let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
-        console.log('gatherDataDanbooru data:', data);  // Log the entire data object.
-
-        return data;
     } catch (error) {
-        console.error('Error in gatherDataDanbooru:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataRule34:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -248,11 +313,11 @@ function gatherDataSankakucomplex() {
         let imageName = imageUrl.split('/').pop().split('?')[0];
 
         let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
-        console.log('gatherDataDanbooru data:', data);  // Log the entire data object.
+        console.log('gatherDataSankakucomplex data:', data);  // Log the entire data object.
 
         return data;
     } catch (error) {
-        console.error('Error in gatherDataSankaku:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataSankakucomplex:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -283,7 +348,7 @@ function gatherDataGelbooru() {
         let imageName = imageUrl.split('/').pop().split('?')[0];
 
         let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
-        console.log('gatherDataDanbooru data:', data);  // Log the entire data object.
+        console.log('gatherDataGelbooru data:', data);  // Log the entire data object.
 
         return data;
     } catch (error) {
@@ -318,11 +383,11 @@ function gatherDataYandere() {
         let imageName = imageUrl.split('/').pop().split('?')[0];
 
         let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
-        console.log('gatherDataDanbooru data:', data);  // Log the entire data object.
+        console.log('gatherDataYandere data:', data);  // Log the entire data object.
 
         return data;
     } catch (error) {
-        console.error('Error in gatherDataGelbooru:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataYandere:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -356,11 +421,11 @@ function gatherDataE621() {
         let imageName = imageUrl.split('/').pop().split('?')[0];
 
         let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
-        console.log('gatherDataDanbooru data:', data);  // Log the entire data object.
+        console.log('gatherDataE621 data:', data);  // Log the entire data object.
 
         return data;
     } catch (error) {
-        console.error('Error in gatherDataGelbooru:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataE621:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -381,11 +446,11 @@ function gatherDataRealbooru() {
         let imageName = imageUrl.split('/').pop().split('?')[0];
 
         let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
-        console.log('gatherDataDerpibooru data:', data);  // Log the entire data object.
+        console.log('gatherDataRealbooru data:', data);  // Log the entire data object.
 
         return data;
     } catch (error) {
-        console.error('Error in gatherDataDerpibooru:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataRealbooru:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -411,11 +476,11 @@ function gatherDataChounyuu() {
         
 
         let data = {tags: tags, imageUrl: imageUrl, imageName: imageName};
-        console.log('gatherDataDerpibooru data:', data);  // Log the entire data object.
+        console.log('gatherDataChounyuu data:', data);  // Log the entire data object.
 
         return data;
     } catch (error) {
-        console.error('Error in gatherDataDerpibooru:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataChounyuu:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -442,11 +507,11 @@ function gatherDataYandex() {
         let tagsFilename = imageName.replace('.png', '.txt');
     
         let data = {tags: tags, imageUrl: imageUrl, imageName: imageName, tagsFilename: tagsFilename};
-        console.log('gatherDataDerpibooru data:', data);  // Log the entire data object.
+        console.log('gatherDataYandex data:', data);  // Log the entire data object.
     
         return data;
     } catch (error) {
-        console.error('Error in gatherDataDerpibooru:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataYandex:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -525,11 +590,11 @@ function gatherDataKnowYourMeme() {
             tagsFilename: tagsFilename
         };
         
-        console.log('gatherKnowYourMeme data:', data);  // Log the entire data object.
+        console.log('gatherDataKnowYourMeme data:', data);  // Log the entire data object.
 
         return data;
     } catch (error) {
-        console.error('Error in gatherKnowYourMeme:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataKnowYourMeme:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -548,25 +613,7 @@ function gatherDataPinterest() {
 
         return data;
     } catch (error) {
-        console.error('Error in gatherDataDanbooru:', error);  // Log any unexpected errors.
-        return null;
-    }
-}
-function gatherDataPixiv() {
-    try {
-        // Select the first image inside a div with role 'presentation'
-        let imageElement = document.querySelector('div[role="presentation"] img');
-        let imageUrl = imageElement ? imageElement.src : null;
-
-        // Assuming generateRandomName is correctly defined
-        let imageName = imageUrl ? (generateRandomName(16, 32) + '.png') : null;
-
-        let data = { imageUrl: imageUrl, imageName: imageName };
-        console.log('gatherDataPixiv data:', data);
-
-        return data;
-    } catch (error) {
-        console.error('Error in gatherDataPixiv:', error);
+        console.error('Error in gatherDataPinterest:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -580,11 +627,11 @@ function gatherDataMetmuseum() {
         let imageName = (generateRandomName(16, 32) + '.png');
 
         let data = { imageUrl: imageUrl, imageName: imageName };
-        console.log('gatherDataPixiv data:', data);
+        console.log('gatherDataMetmuseum data:', data);
 
         return data;
     } catch (error) {
-        console.error('Error in gatherDataPixiv:', error);
+        console.error('Error in gatherDataMetmuseum:', error);
         return null;
     }
 }
@@ -615,11 +662,11 @@ function gatherDataCivitai() {
             tags: tags
         };
 
-        console.log('Scraped data from Civitai:', data);  // Log the data gathered.
+        console.log('gatherDataCivitai data:', data);  // Log the data gathered.
 
         return data;
     } catch (error) {
-        console.error('Error in scrapeImageFromCivitai:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataCivitai:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -655,11 +702,313 @@ function gatherDataWallhaven() {
             tags: tags
         };
 
-        console.log('Scraped data from Wallpaper:', data);  // Log the data gathered.
+        console.log('gatherDataWallhaven data:', data);  // Log the data gathered.
 
         return data;
     } catch (error) {
-        console.error('Error in gatherDataFromWallpaper:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataWallhaven:', error);  // Log any unexpected errors.
+        return null;
+    }
+}
+function gatherDataPexels() {
+    try {
+        // Optional check: ensure we are on pexels.com/photo/ URL
+        if (!/pexels\.com\/photo\//.test(window.location.href)) {
+            console.warn('Not on a Pexels /photo/ page; skipping scrape.');
+            return null;
+        }
+
+        // 1. Find the container <div> whose class starts with "PhotoZoom"
+        let container = document.querySelector('div[class^="PhotoZoom"]');
+        if (!container) {
+            console.warn('No <div> with class starting "PhotoZoom" found on this Pexels photo page.');
+            return null;
+        }
+
+        // 2. Locate the <img> within that container that has a srcset
+        let imageElement = container.querySelector('img[srcset]');
+        if (!imageElement) {
+            console.warn('No <img> with srcset found inside the PhotoZoom container.');
+            return null;
+        }
+
+        // 3. Extract the last (largest) image link from srcset
+        let srcsetList = imageElement.getAttribute('srcset').split(',');
+        let lastSrcsetItem = srcsetList[srcsetList.length - 1].trim();
+        let fullSizeUrl = lastSrcsetItem.split(' ')[0];  // e.g. https://images.pexels.com/...some.jpeg?...
+        let imageUrl = fullSizeUrl.split('?')[0];        // Strip query parameters
+
+        // 4. Extract a filename from this URL
+        let imageName = imageUrl.split('/').pop();
+
+        // 5. Find the first <h1> with a title attribute for caption
+        let captionElement = document.querySelector('h1[title]');
+        let caption = captionElement ? captionElement.getAttribute('title').trim() : '';
+
+        // 6. Put caption into tags array
+        let tags = [caption];
+
+        let data = {
+            imageUrl,
+            imageName,
+            tags
+        };
+
+        console.log('Scraped data from Pexels:', data);
+        return data;
+
+    } catch (error) {
+        console.error('Error in gatherDataPexels:', error);
+        return null;
+    }
+}
+function gatherDataKemono() {
+    try {
+        // Optional check: ensure we are on kemono.su(party)/data/ URL
+        if (!/^https?:\/\/n\d+\.kemono\.(?:su|party)\/data\//.test(window.location.href)) {
+            console.warn('Not on https://nX.kemono.su/data/ or https://nX.kemono.party/data/ page; skipping scrape.');
+            return null;
+        }
+
+        // 1. Find the only <img> on the page
+        let imageElement = document.querySelector('img');
+        if (!imageElement) {
+            console.warn('No <img> found on the page; cannot gather data.');
+            return null;
+        }
+
+        // 2. Extract its src
+        let imageUrl = imageElement.src;
+        if (!imageUrl) {
+            console.warn('The <img> has no src; cannot gather data.');
+            return null;
+        }
+
+        // 3. Get file name from URL, removing query parameters if any
+        let imageName = imageUrl.split('/').pop().split('?')[0];
+
+        // 4. No caption or other tags, so just provide an empty array
+        let tags = [];
+
+        // 5. Return the data object
+        let data = {
+            imageUrl: imageUrl,
+            imageName: imageName,
+            tags: tags
+        };
+        console.log('gatherDataKemono data:', data);
+
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataKemono:', error);
+        return null;
+    }
+}
+function gatherDataShotdeck() {
+    try {
+        // 1. Verify we are on shotdeck.com/browse/stills (start of URL)
+        if (!/^https?:\/\/shotdeck\.com\/browse\/stills/.test(window.location.href)) {
+            console.warn('Not on https://shotdeck.com/browse/stills...; skipping scrape.');
+            return null;
+        }
+
+        // 2. Find the div#hero, the anchor inside it, and then the <img id="shot_details_hero">
+        let heroDiv = document.getElementById('hero');
+        if (!heroDiv) {
+            console.warn('No div with id="hero" found; skipping scrape.');
+            return null;
+        }
+
+        let anchorElement = heroDiv.querySelector('a');
+        if (!anchorElement) {
+            console.warn('No <a> found inside #hero; skipping scrape.');
+            return null;
+        }
+
+        let imageElement = anchorElement.querySelector('img#shot_details_hero');
+        if (!imageElement) {
+            console.warn('No <img id="shot_details_hero"> found inside the anchor; skipping scrape.');
+            return null;
+        }
+
+        // 3. Adjust the image src from /thumb/small_... to get the full image
+        let thumbSrc = imageElement.src;
+        let imageUrl = thumbSrc.replace('/thumb/small_', '/');
+
+        // Derive the file name (removing query params if any)
+        let imageName = imageUrl.split('/').pop().split('?')[0];
+
+        // 4. Collect tags from .detail-group where p.detail-type is among the desired categories
+        //    (We've commented out 'Lighting Type:' for now.)
+        let wantedCategories = [
+            'Tags:',
+            'Actors:',
+            'Color:',
+            'Shot Type:',
+            'Composition:',
+            'Lighting:',
+            // 'Lighting Type:',  // commented out
+            'Time of Day:',
+            'Set:'
+        ];
+
+        let tags = [];
+        let detailGroups = document.querySelectorAll('.detail-group');
+
+        // Helper to transform shot-type tags
+        function transformShotTypeTag(rawTag) {
+            if (rawTag === 'Aerial') {
+                return 'Aerial view';
+            } else if (rawTag === 'Clean single') {
+                return 'Clean single shot';
+            }
+            // Add more special cases if needed
+            return rawTag; // else return unchanged
+        }
+        function transformCompositionTypeTag(rawTag) {
+            if (rawTag === 'Center') {
+                return 'Centered composition';
+            } else if (rawTag === 'Left heavy') {
+                return 'Left heavy composition';
+
+            } else if (rawTag === 'Right heavy') {
+                return 'Right heavy composition';
+
+            } else if (rawTag === 'Balanced') {
+                return 'Balanced composition';
+
+            } else if (rawTag === 'Symmetrical') {
+                return 'Symmetrical composition';
+
+            } else if (rawTag === 'Short side') {
+                return 'Short side composition';
+            };
+            // Add more special cases if needed
+            return rawTag; // else return unchanged
+        }
+
+        detailGroups.forEach(group => {
+            let detailTypeP = group.querySelector('p.detail-type');
+            if (!detailTypeP) return;
+
+            let detailTypeText = detailTypeP.textContent.trim();
+
+            // If the detail type is one of the categories we want to collect
+            if (wantedCategories.includes(detailTypeText)) {
+                // Gather all <a> text in the sibling .details container
+                let anchors = group.querySelectorAll('.details a');
+                anchors.forEach(a => {
+                    let rawTag = a.textContent.trim();
+                    let finalTag = rawTag;
+
+                    // Customize based on which detail-type we have
+                    if (detailTypeText === 'Shot Type:') {
+                        finalTag = transformShotTypeTag(rawTag);
+                    } 
+                    else if (detailTypeText === 'Color:') {
+                        // Skip appending "theme" for "Saturated" or "Desaturated"
+                        if (rawTag !== 'Saturated' && rawTag !== 'Desaturated') {
+                            finalTag = rawTag + ' theme';
+                        }
+                    }
+                    else if (detailTypeText === 'Composition:') {
+                        finalTag = transformCompositionTypeTag(rawTag);
+                    } 
+                    // else if (detailTypeText === 'Lighting Type:') { ... } // still commented out
+
+                    // Add finalTag to our tags array
+                    tags.push(finalTag);
+                });
+            }
+        });
+
+        let data = {
+            imageUrl,
+            imageName,
+            tags
+        };
+
+        console.log('Scraped data from Shotdeck:', data);
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataShotdeck:', error);
+        return null;
+    }
+}
+function gatherDataPixiv() {
+    try {
+        // 1. Confirm we are on i.pximg.net
+        if (!/^https?:\/\/i\.pximg\.net\//.test(window.location.href)) {
+            return null;
+        }
+
+        // 2. Find the single <img> in the document
+        let imageElement = document.querySelector('img');
+        if (!imageElement) {
+            console.warn('No <img> found on this page.');
+            return null;
+        }
+
+        // 3. Extract the full URL
+        let imageUrl = imageElement.src;
+        // 4. Build a filename from the last path segment (remove query if any)
+        let imageName = imageUrl.split('/').pop().split('?')[0];
+        
+        // 5. Return data with an empty tags array
+        let data = {
+            imageUrl: imageUrl,
+            imageName: imageName,
+            tags: []
+        };
+        console.log('Scraped data from i.pximg.net direct-view page:', data);
+
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataPixiv:', error);
+        return null;
+    }
+}
+
+function gatherDataFallback() {
+    try {
+        let images = Array.from(document.querySelectorAll('img'));
+        if (images.length === 0) {
+            console.warn('No images found for fallback');
+            return null;
+        }
+
+        let biggest = images[0];
+        let maxArea = (biggest.naturalWidth || biggest.width) * (biggest.naturalHeight || biggest.height);
+        images.forEach(img => {
+            let area = (img.naturalWidth || img.width) * (img.naturalHeight || img.height);
+            if (area > maxArea) {
+                biggest = img;
+                maxArea = area;
+            }
+        });
+
+        let width = biggest.naturalWidth || biggest.width;
+        let height = biggest.naturalHeight || biggest.height;
+        if (width < 512 || height < 512) {
+            console.warn('No image large enough for fallback');
+            return null;
+        }
+
+        let imageUrl = biggest.src;
+        let imageName = imageUrl.split('/').pop().split('?')[0];
+        let altText = biggest.alt;
+        let tags = altText ? altText.split(' ') : [];
+
+        let data = {
+            imageUrl: imageUrl,
+            imageName: imageName,
+            tags: tags
+        };
+
+        console.log('Scraped data using fallback method:', data);
+        return data;
+    } catch (error) {
+        console.error('Error in gatherDataFallback:', error);
         return null;
     }
 }
@@ -690,11 +1039,11 @@ function gatherDataGenericSite() {
             tags: tags
         };
 
-        console.log('Scraped data from GenericSite:', data);  // Log the data gathered.
+        console.log('gatherDataGenericSite data:', data);  // Log the data gathered.
 
         return data;
     } catch (error) {
-        console.error('Error in scrapeImageFromGenericSite:', error);  // Log any unexpected errors.
+        console.error('Error in gatherDataGenericSite:', error);  // Log any unexpected errors.
         return null;
     }
 }
@@ -762,9 +1111,6 @@ function gatherData(callback) {
             case 'pinterest.com':
                 gatheredData = gatherDataPinterest();
             break;
-            case 'pixiv.net':
-                gatheredData = gatherDataPixiv();
-            break;
             case 'metmuseum.org':
                 gatheredData = gatherDataMetmuseum();
             break;
@@ -773,6 +1119,21 @@ function gatherData(callback) {
             break;
             case 'wallhaven.cc':
                 gatheredData = gatherDataWallhaven();
+            break;
+            case 'pexels.com':
+                gatheredData = gatherDataPexels();
+            break;
+            case 'kemono.su':
+                gatheredData = gatherDataKemono();
+            break;
+            case 'kemono.party':
+                gatheredData = gatherDataKemono();
+            break;
+            case 'shotdeck.com':
+                gatheredData = gatherDataShotdeck();
+            break;
+            case 'piximg.net':
+                gatheredData = gatherDataPixiv();
             break;
             case 'GenericSite.com':
                 gatheredData = gatherDataGenericSite();
